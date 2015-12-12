@@ -59,3 +59,7 @@ Content-Length: X
     "prefix": "get_ch"
 }
 ```
+
+### Providers
+
+- [atom-autocomplete-gdscript](https://github.com/neikeq/atom-autocomplete-gdscript)
