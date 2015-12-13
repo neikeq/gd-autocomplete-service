@@ -48,11 +48,13 @@ void CodeCompletionServer::_subthread_start(void *s) {
 			String request;
 			request.parse_utf8((const char*)request_str.ptr());
 			Vector<String> requests = request.split("\n");
-			int body_size = 0;
+			int body_size=0;
 			Vector<String> request_headers;
-			Method method = METHOD_GET;
+			Method method=METHOD_GET;
 
 			request_str.clear();
+
+			bool keep_alive=false;
 
 			for (int i = 0; i < requests.size(); i++) {
 				String s = requests[i].strip_edges();
@@ -79,7 +81,9 @@ void CodeCompletionServer::_subthread_start(void *s) {
 					method = (Method)method_idx;
 				} else {
 					if (s.to_lower().begins_with("content-length:")) {
-						body_size = s.substr(s.find(":") + 1, s.length()).strip_edges().to_int();
+						body_size=s.substr(s.find(":") + 1, s.length()).strip_edges().to_int();
+					} else if (s.to_lower().begins_with("connection:")) {
+						keep_alive=s.substr(s.find(":") + 1, s.length()).strip_edges()=="keep-alive";
 					}
 
 					request_headers.push_back(s);
@@ -106,7 +110,7 @@ void CodeCompletionServer::_subthread_start(void *s) {
 						String resp_status = "400 Bad Request";
 						String resp_headers = "Accept: application/json\r\n";
 						resp_headers += "Accept-Charset: utf-8\r\n";
-						_write_response(cd, resp_status, resp_headers, String());
+						_write_response(cd, resp_status, resp_headers, String(), !keep_alive);
 						break;
 					}
 
@@ -123,15 +127,20 @@ void CodeCompletionServer::_subthread_start(void *s) {
 					String resp_status = "200 OK";
 					String resp_headers = "Content-Type: application/json; charset=UTF-8\r\n";
 					String resp_body = data.to_json();
-					_write_response(cd, resp_status, resp_headers, resp_body);
+					_write_response(cd, resp_status, resp_headers, resp_body, !keep_alive);
 
 				} break;
 				default: {
 
 					String resp_status = "405 Method Not Allowed";
 					String resp_headers = "Allow: POST\r\n";
-					_write_response(cd, resp_status, resp_headers, String());
+					_write_response(cd, resp_status, resp_headers, String(), !keep_alive);
 				} break;
+			}
+
+			if (!keep_alive) {
+				// fall to close connection
+				break;
 			}
 		}
 	}
