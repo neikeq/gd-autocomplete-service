@@ -86,8 +86,6 @@ void CodeCompletionServer::_subthread_start(void *s) {
 				}
 			}
 
-			Error w_err = OK;
-
 			switch (method) {
 				case METHOD_POST: {
 
@@ -97,55 +95,43 @@ void CodeCompletionServer::_subthread_start(void *s) {
 					}
 
 					// read body
-					ByteArray ret;
-					ret.resize(body_size);
-					ByteArray::Write w = ret.write();
-
-					err = cd->connection->get_data(w.ptr(), body_size);
-
-					if (err!=OK) {
-						_close_client(cd);
-						ERR_FAIL_COND(err!=OK);
-					}
+					String json_body = cd->connection->get_utf8_string(body_size);
 
 					// parse body
-					Dictionary req_body;
-					err = req_body.parse_json(Variant(ret).call("get_string_from_utf8"));
-					if (err==ERR_PARSE_ERROR) {
+					Dictionary data;
+					Error parse_err = data.parse_json(json_body);
+
+					if (parse_err!=OK) {
+
 						String resp_status = "400 Bad Request";
 						String resp_headers = "Accept: application/json\r\n";
 						resp_headers += "Accept-Charset: utf-8\r\n";
-						w_err = _write_response(cd, resp_status, resp_headers, String());
+						_write_response(cd, resp_status, resp_headers, String());
 						break;
 					}
 
 					// obtain suggestions based on the request
 					String hint;
 					Vector<String> suggestions;
-					cd->ccs->get_service()->obtain_suggestions(req_body, suggestions, hint);
+					cd->ccs->get_service()->obtain_suggestions(data, suggestions, hint);
 
-					req_body["hint"]="hint";
-					req_body["suggestions"]=suggestions;
-					req_body.erase("text");
+					data["hint"]="hint";
+					data["suggestions"]=suggestions;
+					data.erase("text");
 
 					// done! deliver <3
 					String resp_status = "200 OK";
 					String resp_headers = "Content-Type: application/json; charset=UTF-8\r\n";
-					String resp_body = req_body.to_json();
-					w_err = _write_response(cd, resp_status, resp_headers, resp_body);
+					String resp_body = data.to_json();
+					_write_response(cd, resp_status, resp_headers, resp_body);
 
 				} break;
 				default: {
 
 					String resp_status = "405 Method Not Allowed";
 					String resp_headers = "Allow: POST\r\n";
-					w_err = _write_response(cd, resp_status, resp_headers, String());
+					_write_response(cd, resp_status, resp_headers, String());
 				} break;
-			}
-
-			if (w_err!=OK) {
-				_close_client(cd);
-				ERR_FAIL_COND(err!=OK);
 			}
 		}
 	}
@@ -153,20 +139,20 @@ void CodeCompletionServer::_subthread_start(void *s) {
 	_close_client(cd);
 }
 
-Error CodeCompletionServer::_write_response(ClientData *cd, const String& p_status, const String p_headers, const String& p_body, bool p_close) {
+void CodeCompletionServer::_write_response(ClientData *cd, const String& p_status, const String p_headers, const String& p_body, bool p_close) {
 
 	String response = "HTTP/1.1 " + p_status + "\r\n";
 	response += "Server: Godot Auto-complete Service\r\n";
 	response += p_headers;
 	response += "Connection: " + String(p_close?"close":"keep-alive") + "\r\n";
+
 	if (!p_body.empty())
 		response += "Content-Length: " + itos(p_body.length()) + "\r\n";
 
 	response += "\r\n";
 	response += p_body;
 
-	CharString cs = response.utf8();
-	return cd->connection->put_data((const uint8_t*)cs.ptr(), cs.length());
+	cd->connection->put_utf8_string(response);
 }
 
 void CodeCompletionServer::_thread_start(void *s) {

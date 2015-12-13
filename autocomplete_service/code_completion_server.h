@@ -43,7 +43,7 @@ class CodeCompletionServer : public Object {
 	static void _subthread_start(void *s);
 	static void _thread_start(void *s);
 
-	static Error _write_response(ClientData *cd, const String& p_status, const String p_headers, const String& p_body, bool p_close=false);
+	static void _write_response(ClientData *cd, const String& p_status, const String p_headers, const String& p_body, bool p_close=false);
 
 	Mutex *wait_mutex;
 	Thread *thread;
