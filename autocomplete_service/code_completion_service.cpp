@@ -43,7 +43,16 @@ void CodeCompletionService::obtain_suggestions(Dictionary &r_request, Vector<Str
 	List<String> options;
 	script->get_language()->complete_code(code, script->get_path().get_base_dir(), base, &options, hint);
 
-	r_request["prefix"] = _filter_completion_candidates(code_lines[row], col, options, r_suggestions);
+	if (options.size() > 0) {
+
+		List<String> language_keywords;
+		script->get_language()->get_reserved_words(&language_keywords);
+
+		r_request["prefix"] = _filter_completion_candidates(col, code_lines[row], language_keywords, options, r_suggestions);
+
+	} else {
+		r_request["prefix"] = String();
+	}
 }
 
 void CodeCompletionService::_get_text_for_completion(String& p_text, Vector<String>& substrings, int p_row, int p_col) {
@@ -83,11 +92,9 @@ Node* CodeCompletionService::_find_node_for_script(Node* p_base, Node* p_current
 	return NULL;
 }
 
-String CodeCompletionService::_filter_completion_candidates(const String& p_line, int p_col, const List<String>& p_options, Vector<String> &r_suggestions) {
+String CodeCompletionService::_filter_completion_candidates(int p_col, const String& p_line, List<String>& p_lang_keywords, const List<String>& p_options, Vector<String> &r_suggestions) {
 
 	int cofs = CLAMP(p_col,0,p_line.length());
-
-	String prefix;
 
 	//look for keywords first
 
@@ -104,14 +111,19 @@ String CodeCompletionService::_filter_completion_candidates(const String& p_line
 		c--;
 	}
 
+	String prefix;
+
+	bool pre_keyword=false;
 	bool cancel=false;
 
 	if (!inquote && first_quote==cofs-1) {
 
 		cancel=true;
+
 	} if (inquote && first_quote!=-1) {
 
 		prefix=p_line.substr(first_quote,cofs-first_quote);
+
 	} else if (cofs>0 && p_line[cofs-1]==' ') {
 		int kofs=cofs-1;
 		String kw;
@@ -122,6 +134,8 @@ String CodeCompletionService::_filter_completion_candidates(const String& p_line
 			kw=String::chr(p_line[kofs])+kw;
 			kofs--;
 		}
+
+		pre_keyword=keywords.find(kw) || p_lang_keywords.find(kw);
 
 	} else {
 
@@ -135,7 +149,7 @@ String CodeCompletionService::_filter_completion_candidates(const String& p_line
 		}
 	}
 
-	if (cancel)
+	if (cancel || (!pre_keyword && prefix=="" && (cofs==0 || !completion_prefixes.has(String::chr(p_line[cofs-1])))))
 		return String();
 
 	for (const List<String>::Element *E=p_options.front();E;E=E->next()) {
@@ -148,6 +162,23 @@ String CodeCompletionService::_filter_completion_candidates(const String& p_line
 }
 
 CodeCompletionService::CodeCompletionService() {
+
+	completion_prefixes.insert(".");
+	completion_prefixes.insert(",");
+	completion_prefixes.insert("(");
+
+	keywords.push_back("Vector2");
+	keywords.push_back("Vector3");
+	keywords.push_back("Plane");
+	keywords.push_back("Quat");
+	keywords.push_back("AABB");
+	keywords.push_back("Matrix3");
+	keywords.push_back("Transform");
+	keywords.push_back("Color");
+	keywords.push_back("Image");
+	keywords.push_back("InputEvent");
+
+	ObjectTypeDB::get_type_list(&keywords);
 }
 
 CodeCompletionService::~CodeCompletionService() {
