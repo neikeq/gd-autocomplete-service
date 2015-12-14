@@ -1,6 +1,9 @@
 
 # Godot Auto-complete Service
-Godot module that listens for http requests and returns autocomplete suggestions. Under test.
+Godot module that listens for HTTP Requests and returns auto-complete suggestions. Under test.
+
+### Known issues
+- Currently, only one Godot editor can provide suggestions (since only one can bind to the server port).
 
 ### Use it from your provider
 
