@@ -2,18 +2,44 @@
 # Godot Auto-complete Service
 Godot module that listens for HTTP Requests and returns auto-complete suggestions. Under test.
 
-### Known issues
-- Currently, only one Godot editor can provide suggestions (since only one can bind to the server port).
-
 ### Use it from your provider
 
 Requesting for completion suggestions from your provider is quite simple.
-The server listens for HTTP Request on http://localhost:6070 (**this address or port may change in the future**).
+The server listens for HTTP Requests on http://localhost:port. The port varies depending of how many servers (editors) are listening at the same time.
 
-The following is a request example. Currently, only _POST_ method is allowed. The body must be a JSON with the completion request information.
+##### Getting the correct port
+
+The list of servers is stored in the following file:
 
 ```
-POST http://localhost:6070 HTTP/1.1
+$HOME/.godot/.autocomplete-servers.json
+$APPDATA\Godot\.autocomplete-servers.json
+```
+
+Content:
+
+``` json
+{ "md5 of the project path": "port" }
+```
+
+The key is the md5 hash of the project path. To know the project path for a file, you must search backwards in the parent directories of your script until you find the directory that contains the file `engine.cfg`.
+
+With this information you can retrieve the port for the server that provides code completion suggestions for your project.
+
+##### When to retrieve the port
+
+This depends of how the provider is implemented. There are 3 example situations where you may need to read the servers list to know your port.
+
+- When you don't know the port for a project (either because this is the first request for that project, or because no server is providing suggestions for that project at that moment).
+- When the server returns a response with status code 404. This means the server no longer provides suggestions for this project.
+- Depending of the situation, it may be needed when a request results in an error.
+
+##### Request example
+
+Currently, only _POST_ method is allowed. The body must be a JSON with the completion request information.
+
+```
+POST http://localhost:port HTTP/1.1
 Accept: application/json
 Connection: keep-alive
 Content-Type: application/json; charset=UTF-8
@@ -39,6 +65,8 @@ The meta field is also optional. It can contain any information you wish to rece
     "meta": "Ignored by the service. Returned in the response."
 }
 ```
+
+##### Response example
 
 If everything went well, you should receive a response like this:
 
@@ -68,7 +96,7 @@ Content-Length: X
 }
 ```
 
-The important part here are the following field:
+The important parts are the following field:
 
 - **hint** Sometimes, a hint may be returned. It contains a brief information about the current function, and it may be used for other stuff too (not sure).
 - **suggestions** The resulted list of completion suggestions.
