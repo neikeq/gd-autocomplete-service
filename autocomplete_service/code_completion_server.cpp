@@ -128,7 +128,7 @@ void CodeCompletionServer::_subthread_start(void *s) {
 						break;
 					}
 
-					data["hint"]="hint";
+					data["hint"]=hint.replace(String::chr(0xFFFF), "\n");
 					data["suggestions"]=suggestions;
 					data.erase("text");
 

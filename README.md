@@ -96,9 +96,9 @@ Content-Length: X
 }
 ```
 
-The important parts are the following field:
+The important parts are the following fields:
 
-- **hint** Sometimes, a hint may be returned. It contains a brief information about the current function, and it may be used for other stuff too (not sure).
+- **hint** When typing parameters, the response returns a hint with information about the function return type and parameters. The hint encloses the current parameter with line breaks. Example: `Node get_node( \nNodePath path\n )`. You can replace the line breaks to fit editor style. For example, with HTML bold tags: `Node get_node( <b>NodePath path</b> )`.
 - **suggestions** The resulted list of completion suggestions.
 - **prefix** The prefix string to be replaced with the user's chosen suggestion.
 
