@@ -14,9 +14,13 @@ static bool _is_completable(CharType c) {
 	return !_is_symbol(c) || c=='"' || c=='\'';
 }
 
-void CodeCompletionService::obtain_suggestions(Dictionary &r_request, Vector<String> &r_suggestions, String& hint) {
+bool CodeCompletionService::obtain_suggestions(Dictionary &r_request, Vector<String> &r_suggestions, String& r_hint) {
 
 	String path = Globals::get_singleton()->localize_path(r_request["path"]);
+
+	if (path == "res://" || !path.begins_with("res://"))
+		return false;
+
 	String code = r_request["text"];
 	Dictionary cursor = r_request["cursor"];
 	int row = cursor["row"];
@@ -25,10 +29,10 @@ void CodeCompletionService::obtain_suggestions(Dictionary &r_request, Vector<Str
 	Ref<Script> script = ResourceLoader::load(path);
 
 	if (!script.is_valid())
-		return;
+		return false;
 
 	if (code.empty()) {
-		ERR_FAIL_COND(!script->has_source_code());
+		ERR_FAIL_COND_V(!script->has_source_code(), false);
 		code = script->get_source_code();
 	}
 
@@ -41,7 +45,7 @@ void CodeCompletionService::obtain_suggestions(Dictionary &r_request, Vector<Str
 	}
 
 	List<String> options;
-	script->get_language()->complete_code(code, script->get_path().get_base_dir(), base, &options, hint);
+	script->get_language()->complete_code(code, script->get_path().get_base_dir(), base, &options, r_hint);
 
 	if (options.size() > 0) {
 
@@ -53,6 +57,8 @@ void CodeCompletionService::obtain_suggestions(Dictionary &r_request, Vector<Str
 	} else {
 		r_request["prefix"] = String();
 	}
+
+	return true;
 }
 
 void CodeCompletionService::_get_text_for_completion(String& p_text, Vector<String>& substrings, int p_row, int p_col) {

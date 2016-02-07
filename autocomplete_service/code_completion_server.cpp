@@ -1,5 +1,8 @@
 /* code_completion_server.cpp */
 #include "code_completion_server.h"
+#include "os/file_access.h"
+#include "tools/editor/editor_settings.h"
+#include "globals.h"
 
 void CodeCompletionServer::_close_client(ClientData *cd) {
 
@@ -117,7 +120,13 @@ void CodeCompletionServer::_subthread_start(void *s) {
 					// obtain suggestions based on the request
 					String hint;
 					Vector<String> suggestions;
-					cd->ccs->get_service()->obtain_suggestions(data, suggestions, hint);
+					bool valid = cd->ccs->get_service()->obtain_suggestions(data, suggestions, hint);
+
+					if (!valid) {
+						String resp_status = "404 Not Found";
+						_write_response(cd, resp_status, "", String(), !keep_alive);
+						break;
+					}
 
 					data["hint"]="hint";
 					data["suggestions"]=suggestions;
@@ -148,7 +157,7 @@ void CodeCompletionServer::_subthread_start(void *s) {
 	_close_client(cd);
 }
 
-void CodeCompletionServer::_write_response(ClientData *cd, const String& p_status, const String p_headers, const String& p_body, bool p_close) {
+void CodeCompletionServer::_write_response(ClientData *cd, const String& p_status, const String& p_headers, const String& p_body, bool p_close) {
 
 	String response = "HTTP/1.1 " + p_status + "\r\n";
 	response += "Server: Godot Auto-complete Service\r\n";
@@ -171,9 +180,64 @@ void CodeCompletionServer::_thread_start(void *s) {
 	while(!self->quit) {
 
 		if (self->cmd == CMD_ACTIVATE) {
-			self->server->listen(self->port);
-			self->active = true;
-			self->cmd = CMD_NONE;
+
+			int port_max = self->port + 10;
+
+			while (self->port < port_max) {
+
+				if (self->server->listen(self->port)==OK) {
+					self->active = true;
+					self->cmd = CMD_NONE;
+
+					String serversPath = EditorSettings::get_singleton()->get_settings_path() + "/.autocomplete-servers.json";
+					Dictionary serversList;
+
+					FileAccess *f_read=FileAccess::open(serversPath,FileAccess::READ);
+					if (f_read) {
+						String text;
+						String l = f_read->get_line();
+						while(!f_read->eof_reached()) {
+							text+=l+"\n";
+							l = f_read->get_line();
+						}
+						text+=l;
+
+						serversList.parse_json(text);
+						f_read->close();
+						memdelete(f_read);
+					}
+
+					FileAccess *f_write = FileAccess::open(serversPath,FileAccess::WRITE);
+					if (f_write) {
+						String serverPort = String::num(self->port);
+
+						if (!serversList.empty()) {
+							Array keys = serversList.keys();
+							for (int i = 0; i < keys.size(); i++) {
+								String md5path = keys[i];
+								if (serversList[md5path] == serverPort) {
+									serversList.erase(md5path);
+									break;
+								}
+							}
+						}
+
+						serversList[Globals::get_singleton()->get_resource_path().md5_text()] = serverPort;
+
+						f_write->store_string(serversList.to_json());
+						f_write->close();
+						memdelete(f_write);
+					}
+
+					break;
+				}
+
+				self->port++;
+			}
+
+			if (!self->active)
+				self->quit = true;
+
 		} else if (self->cmd == CMD_STOP) {
 			self->server->stop();
 			self->active = false;

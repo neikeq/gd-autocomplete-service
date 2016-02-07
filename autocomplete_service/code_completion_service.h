@@ -16,7 +16,7 @@ class CodeCompletionService : public Node {
 	String _filter_completion_candidates(int p_col, const String& p_line, List<String>& p_lang_keywords, const List<String>& p_options, Vector<String> &r_suggestions);
 
 public:
-	void obtain_suggestions(Dictionary &r_request, Vector<String> &r_suggestions, String& hint);
+	bool obtain_suggestions(Dictionary &r_request, Vector<String> &r_suggestions, String& r_hint);
 
 	CodeCompletionService();
 	~CodeCompletionService();
