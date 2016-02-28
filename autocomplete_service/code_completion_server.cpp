@@ -230,8 +230,7 @@ void CodeCompletionServer::stop() {
 
 void CodeCompletionServer::_add_to_servers_list() {
 
-	static String serversPath = EditorSettings::get_singleton()->get_settings_path() + "/.autocomplete-servers.json";
-
+	String serversPath = EditorSettings::get_singleton()->get_settings_path() + "/.autocomplete-servers.json";
 	Dictionary serversList;
 
 	FileAccess *f_read=FileAccess::open(serversPath,FileAccess::READ);
