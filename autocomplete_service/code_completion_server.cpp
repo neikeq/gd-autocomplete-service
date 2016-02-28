@@ -4,6 +4,12 @@
 #include "tools/editor/editor_settings.h"
 #include "globals.h"
 
+#define CLOSE_CLIENT_COND(m_cond, m_cd) \
+	{ if ( m_cond ) {	\
+        _close_client(m_cd);	\
+		return;	 \
+	} }	\
+
 void CodeCompletionServer::_close_client(ClientData *cd) {
 
 	cd->connection->disconnect();
@@ -34,97 +40,92 @@ void CodeCompletionServer::_subthread_start(void *s) {
 	while(!cd->quit) {
 		uint8_t byte;
 		Error err = cd->connection->get_data(&byte, 1);
-
-		if (err!=OK) {
-			_close_client(cd);
-			ERR_FAIL_COND(err!=OK);
-		}
+		CLOSE_CLIENT_COND(err!=OK, cd);
 
 		request_str.push_back(byte);
-
 		int rs = request_str.size();
+
 		if ((rs>=2 && request_str[rs-2]=='\n' && request_str[rs-1]=='\n') ||
 			(rs>=4 && request_str[rs-4]=='\r' && request_str[rs-3]=='\n' && rs>=4 && request_str[rs-2]=='\r' && request_str[rs-1]=='\n')) {
 
-			// end of request, parse
 			request_str.push_back(0);
-			String request;
-			request.parse_utf8((const char*)request_str.ptr());
-			Vector<String> requests = request.split("\n");
-			int body_size=0;
-			Vector<String> request_headers;
-			Method method=METHOD_GET;
 
+			// End of request header, parse
+			String header;
+			CLOSE_CLIENT_COND(header.parse_utf8((const char*)request_str.ptr()), cd);
+			Vector<String> header_lines = header.split("\n");
 			request_str.clear();
 
-			bool keep_alive=false;
+			Request request;
 
-			for (int i = 0; i < requests.size(); i++) {
-				String s = requests[i].strip_edges();
+			for (int i = 0; i < header_lines.size(); i++) {
+				String s = header_lines[i].strip_edges();
 				if (s.length() == 0)
 					continue;
 
 				if (i == 0) {
-					// parse command, path and version
-					String method_str = s.substr(0, s.find(" "));
+					// Parse command, url and protocol
+					Vector<String> parts = s.split(" ");
+					CLOSE_CLIENT_COND(parts.size() < 3, cd);
 
 					int method_idx = -1;
 					for (int j = 0; j < METHOD_MAX; j++) {
-						if (_methods[j] == method_str) {
+						if (_methods[j] == parts[0]) {
 							method_idx = j;
 							break;
 						}
 					}
+					CLOSE_CLIENT_COND(method_idx < 0, cd);
 
-					if (method_idx < 0) {
-						_close_client(cd);
-						return;
-					}
-
-					method = (Method)method_idx;
+					request.method = (Method) method_idx;
+					request.url = parts[1];
+					request.protocol = parts[2];
 				} else {
-					if (s.to_lower().begins_with("content-length:")) {
-						body_size=s.substr(s.find(":") + 1, s.length()).strip_edges().to_int();
-					} else if (s.to_lower().begins_with("connection:")) {
-						keep_alive=s.substr(s.find(":") + 1, s.length()).strip_edges()=="keep-alive";
+					int sep=s.find(":");
+					if (sep<0)
+						sep=s.length();
+					String field_name = s.substr(0,sep).strip_edges().to_lower();
+					String field_value = s.substr(sep+1,s.length()).strip_edges();
+
+					if (field_name.empty() || field_value.empty())
+						continue;
+
+					if (field_name == "content-length") {
+						request.body_size = field_value.to_int();
 					}
 
-					request_headers.push_back(s);
+					request.header.insert(field_name, field_value);
 				}
 			}
 
-			switch (method) {
+			switch (request.method) {
 				case METHOD_POST: {
 
-					if (body_size == 0) {
-						// no content... continue with next request
+					if (request.body_size == 0) {
+						// No content... ignore request
 						continue;
 					}
 
-					// read body
-					String json_body = cd->connection->get_utf8_string(body_size);
-
-					// parse body
+					// Read and parse body as json
 					Dictionary data;
-					Error parse_err = data.parse_json(json_body);
+					Error parse_err = data.parse_json(request.read_utf8_body());
 
-					if (parse_err!=OK) {
-
-						String resp_status = "400 Bad Request";
-						String resp_headers = "Accept: application/json\r\n";
-						resp_headers += "Accept-Charset: utf-8\r\n";
-						_write_response(cd, resp_status, resp_headers, String(), !keep_alive);
+					if (parse_err != OK) {
+						request.response.status = "400 Bad Request";
+						request.response.set_header("Accept", "application/json");
+						request.response.set_header("Accept-Charset", "utf-8");
+						request.send_response();
 						break;
 					}
 
-					// obtain suggestions based on the request
+					// Obtain suggestions based on the request
 					String hint;
 					Vector<String> suggestions;
 					bool valid = cd->ccs->get_service()->obtain_suggestions(data, suggestions, hint);
 
 					if (!valid) {
-						String resp_status = "404 Not Found";
-						_write_response(cd, resp_status, "", String(), !keep_alive);
+						request.response.status = "404 Not Found";
+						request.send_response();
 						break;
 					}
 
@@ -132,45 +133,25 @@ void CodeCompletionServer::_subthread_start(void *s) {
 					data["suggestions"]=suggestions;
 					data.erase("text");
 
-					// done! deliver <3
-					String resp_status = "200 OK";
-					String resp_headers = "Content-Type: application/json; charset=UTF-8\r\n";
-					String resp_body = data.to_json();
-					_write_response(cd, resp_status, resp_headers, resp_body, !keep_alive);
+					// Done! Deliver <3
+					request.response.status = "200 OK";
+					request.response.set_header("Content-Type", "application/json; charset=UTF-8");
+					request.send_response(data.to_json());
 
 				} break;
 				default: {
 
-					String resp_status = "405 Method Not Allowed";
-					String resp_headers = "Allow: POST\r\n";
-					_write_response(cd, resp_status, resp_headers, String(), !keep_alive);
+					request.response.status = "405 Method Not Allowed";
+					request.response.set_header("Allow", "POST");
+					request.send_response();
 				} break;
 			}
 
-			if (!keep_alive) {
-				// fall to close connection
-				break;
-			}
+			CLOSE_CLIENT_COND(request.header["connection"] != "keep-alive", cd);
 		}
 	}
 
 	_close_client(cd);
-}
-
-void CodeCompletionServer::_write_response(ClientData *cd, const String& p_status, const String& p_headers, const String& p_body, bool p_close) {
-
-	String response = "HTTP/1.1 " + p_status + "\r\n";
-	response += "Server: Godot Auto-complete Service\r\n";
-	response += p_headers;
-	response += "Connection: " + String(p_close?"close":"keep-alive") + "\r\n";
-
-	if (!p_body.empty())
-		response += "Content-Length: " + itos(p_body.length()) + "\r\n";
-
-	response += "\r\n";
-	response += p_body;
-
-	cd->connection->put_utf8_string(response);
 }
 
 void CodeCompletionServer::_thread_start(void *s) {
@@ -188,46 +169,7 @@ void CodeCompletionServer::_thread_start(void *s) {
 				if (self->server->listen(self->port)==OK) {
 					self->active = true;
 					self->cmd = CMD_NONE;
-
-					String serversPath = EditorSettings::get_singleton()->get_settings_path() + "/.autocomplete-servers.json";
-					Dictionary serversList;
-
-					FileAccess *f_read=FileAccess::open(serversPath,FileAccess::READ);
-					if (f_read) {
-						String text;
-						String l = f_read->get_line();
-						while(!f_read->eof_reached()) {
-							text+=l+"\n";
-							l = f_read->get_line();
-						}
-						text+=l;
-
-						serversList.parse_json(text);
-						f_read->close();
-						memdelete(f_read);
-					}
-
-					FileAccess *f_write = FileAccess::open(serversPath,FileAccess::WRITE);
-					if (f_write) {
-						String serverPort = String::num(self->port);
-
-						if (!serversList.empty()) {
-							Array keys = serversList.keys();
-							for (int i = 0; i < keys.size(); i++) {
-								String md5path = keys[i];
-								if (serversList[md5path] == serverPort) {
-									serversList.erase(md5path);
-									break;
-								}
-							}
-						}
-
-						serversList[Globals::get_singleton()->get_resource_path().md5_text()] = serverPort;
-
-						f_write->store_string(serversList.to_json());
-						f_write->close();
-						memdelete(f_write);
-					}
+					self->_add_to_servers_list();
 
 					break;
 				}
@@ -280,6 +222,50 @@ bool CodeCompletionServer::is_active() const {
 
 void CodeCompletionServer::stop() {
 	cmd = CMD_STOP;
+}
+
+void CodeCompletionServer::_add_to_servers_list() {
+
+	static String serversPath = EditorSettings::get_singleton()->get_settings_path() + "/.autocomplete-servers.json";
+
+	Dictionary serversList;
+
+	FileAccess *f_read=FileAccess::open(serversPath,FileAccess::READ);
+	if (f_read) {
+		String text;
+		String l = f_read->get_line();
+		while(!f_read->eof_reached()) {
+			text+=l+"\n";
+			l = f_read->get_line();
+		}
+		text+=l;
+
+		serversList.parse_json(text);
+		f_read->close();
+		memdelete(f_read);
+	}
+
+	FileAccess *f_write = FileAccess::open(serversPath,FileAccess::WRITE);
+	if (f_write) {
+		String serverPort = String::num(port);
+
+		if (!serversList.empty()) {
+			Array keys = serversList.keys();
+			for (int i = 0; i < keys.size(); i++) {
+				String md5path = keys[i];
+				if (serversList[md5path] == serverPort) {
+					serversList.erase(md5path);
+					break;
+				}
+			}
+		}
+
+		serversList[Globals::get_singleton()->get_resource_path().md5_text()] = serverPort;
+
+		f_write->store_string(serversList.to_json());
+		f_write->close();
+		memdelete(f_write);
+	}
 }
 
 CodeCompletionServer::CodeCompletionServer() {
