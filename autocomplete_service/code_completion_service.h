@@ -8,18 +8,38 @@ class CodeCompletionService : public Node {
 
 	OBJ_TYPE(CodeCompletionService, Node);
 
-	Set<String> completion_prefixes;
-	List<StringName> keywords;
-
-	Node* _find_node_for_script(Node* p_base, Node*p_current, const Ref<Script>& p_script);
-	void _get_text_for_completion(String& p_text, Vector<String>& substrings, int p_row, int p_col);
-	String _filter_completion_candidates(int p_col, const String& p_line, List<String>& p_lang_keywords, const List<String>& p_options, Vector<String> &r_suggestions);
-
 public:
-	bool obtain_suggestions(Dictionary &r_request, Vector<String> &r_suggestions, String& r_hint);
+	struct Request {
+		String script_path;
+		String script_text;
+		int row;
+		int column;
+	};
+
+	struct Result {
+		bool valid;
+		String prefix;
+		String hint;
+		Vector<String> suggestions;
+
+		Result(bool p_valid=false) {
+			valid = p_valid;
+		}
+	};
+
+	Result obtain_suggestions(const Request& p_request);
 
 	CodeCompletionService();
 	~CodeCompletionService();
+
+private:
+	Set<String> completion_prefixes;
+	List<StringName> type_keywords;
+	List<String> language_keywords;
+
+	Node* _find_node_for_script(Node* p_base, Node* p_current, const Ref<Script>& p_script);
+	String _get_text_for_completion(const Request& p_request, String& r_text);
+	String _filter_completion_candidates(int p_col, const String& p_line, const List<String>& p_options, Vector<String> &r_suggestions);
 };
 
 #endif // CODE_COMPLETION_SERVICE_H

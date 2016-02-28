@@ -56,7 +56,7 @@ class CodeCompletionServer : public Object {
 		int body_size;
 
 		String read_utf8_body() {
-			cd->connection->get_utf8_string(body_size);
+			return cd->connection->get_utf8_string(body_size);
 		}
 
 		void send_response(const String& p_body=String()) {
@@ -75,6 +75,10 @@ class CodeCompletionServer : public Object {
 			resp += p_body;
 
 			cd->connection->put_utf8_string(resp);
+		}
+
+		Request(ClientData *cd) {
+			this->cd = cd;
 		}
 	};
 
@@ -98,7 +102,7 @@ class CodeCompletionServer : public Object {
 
 public:
 
-	void start(CodeCompletionService *r_service);
+	void start(CodeCompletionService *p_service);
 	void stop();
 
 	bool is_active() const;

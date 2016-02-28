@@ -56,7 +56,7 @@ void CodeCompletionServer::_subthread_start(void *s) {
 			Vector<String> header_lines = header.split("\n");
 			request_str.clear();
 
-			Request request;
+			Request request(cd);
 
 			for (int i = 0; i < header_lines.size(); i++) {
 				String s = header_lines[i].strip_edges();
@@ -100,7 +100,6 @@ void CodeCompletionServer::_subthread_start(void *s) {
 
 			switch (request.method) {
 				case METHOD_POST: {
-
 					if (request.body_size == 0) {
 						// No content... ignore request
 						continue;
@@ -118,19 +117,25 @@ void CodeCompletionServer::_subthread_start(void *s) {
 						break;
 					}
 
-					// Obtain suggestions based on the request
-					String hint;
-					Vector<String> suggestions;
-					bool valid = cd->ccs->get_service()->obtain_suggestions(data, suggestions, hint);
+					// Provide suggestions based on the request
+					CodeCompletionService::Request srequest;
+					srequest.script_path = data["path"];
+					srequest.script_text = data["text"];
+					Dictionary cursor = data["cursor"];
+					srequest.row = cursor["row"];
+					srequest.column = cursor["column"];
 
-					if (!valid) {
+					CodeCompletionService::Result result = cd->ccs->get_service()->obtain_suggestions(srequest);
+
+					if (!result.valid) {
 						request.response.status = "404 Not Found";
 						request.send_response();
 						break;
 					}
 
-					data["hint"]=hint.replace(String::chr(0xFFFF), "\n");
-					data["suggestions"]=suggestions;
+					data["hint"]=result.hint.replace(String::chr(0xFFFF), "\n");
+					data["suggestions"]=result.suggestions;
+					data["prefix"]=result.prefix;
 					data.erase("text");
 
 					// Done! Deliver <3
@@ -170,7 +175,6 @@ void CodeCompletionServer::_thread_start(void *s) {
 					self->active = true;
 					self->cmd = CMD_NONE;
 					self->_add_to_servers_list();
-
 					break;
 				}
 
@@ -209,10 +213,10 @@ void CodeCompletionServer::_thread_start(void *s) {
 	}
 }
 
-void CodeCompletionServer::start(CodeCompletionService *r_service) {
+void CodeCompletionServer::start(CodeCompletionService *p_service) {
 	stop();
 	port = 6070;
-	service = r_service;
+	service = p_service;
 	cmd = CMD_ACTIVATE;
 }
 

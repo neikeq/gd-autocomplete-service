@@ -4,6 +4,10 @@
 #include "io/resource_loader.h"
 #include "globals.h"
 
+#ifdef GDSCRIPT_ENABLED
+#include "modules/gdscript/gd_script.h"
+#endif
+
 static bool _is_symbol(CharType c) {
 
 	return c!='_' && ((c>='!' && c<='/') || (c>=':' && c<='@') || (c>='[' && c<='`') || (c>='{' && c<='~') || c=='\t');
@@ -14,72 +18,69 @@ static bool _is_completable(CharType c) {
 	return !_is_symbol(c) || c=='"' || c=='\'';
 }
 
-bool CodeCompletionService::obtain_suggestions(Dictionary &r_request, Vector<String> &r_suggestions, String& r_hint) {
+CodeCompletionService::Result CodeCompletionService::obtain_suggestions(const Request& p_request) {
 
-	String path = Globals::get_singleton()->localize_path(r_request["path"]);
+	#ifdef GDSCRIPT_ENABLED
+	Result result(true);
+
+	String path = Globals::get_singleton()->localize_path(p_request.script_path);
 
 	if (path == "res://" || !path.begins_with("res://"))
-		return false;
-
-	String code = r_request["text"];
-	Dictionary cursor = r_request["cursor"];
-	int row = cursor["row"];
-	int col = cursor["column"];
+		return Result();
 
 	Ref<Script> script = ResourceLoader::load(path);
 
-	if (!script.is_valid())
-		return false;
+	if (!script.is_valid() || !script->cast_to<GDScript>())
+		return Result();
 
-	if (code.empty()) {
-		ERR_FAIL_COND_V(!script->has_source_code(), false);
-		code = script->get_source_code();
+	String script_text = p_request.script_text;
+
+	if (script_text.empty()) {
+		ERR_FAIL_COND_V(!script->has_source_code(), result);
+		script_text = script->get_source_code();
 	}
-
-	Vector<String> code_lines;
-	_get_text_for_completion(code, code_lines, row, col);
 
 	Node *base = get_tree()->get_edited_scene_root();
 	if (base) {
 		base = _find_node_for_script(base,base,script);
 	}
 
+	String current_line = _get_text_for_completion(p_request, script_text);
+
 	List<String> options;
-	script->get_language()->complete_code(code, script->get_path().get_base_dir(), base, &options, r_hint);
+	script->get_language()->complete_code(script_text, script->get_path().get_base_dir(), base, &options, result.hint);
 
 	if (options.size() > 0) {
-
-		List<String> language_keywords;
-		script->get_language()->get_reserved_words(&language_keywords);
-
-		r_request["prefix"] = _filter_completion_candidates(col, code_lines[row], language_keywords, options, r_suggestions);
-
-	} else {
-		r_request["prefix"] = String();
+		result.prefix = _filter_completion_candidates(p_request.column, current_line, options, result.suggestions);
 	}
 
-	return true;
+	return result;
+	#else
+	return Result();
+	#endif
 }
 
-void CodeCompletionService::_get_text_for_completion(String& p_text, Vector<String>& substrings, int p_row, int p_col) {
+String CodeCompletionService::_get_text_for_completion(const Request& p_request, String& r_text) {
 
-	substrings = p_text.replace("\r","").split("\n");
-	p_text.clear();
+	Vector<String> substrings = r_text.replace("\r","").split("\n");
+	r_text.clear();
 
 	int len = substrings.size();
-	for (int i=0;i<len;i++) {
 
-		if (i==p_row) {
-			p_text+=substrings[i].substr(0,p_col);
-			p_text+=String::chr(0xFFFF); //not unicode, represents the cursor
-			p_text+=substrings[i].substr(p_col,substrings[i].size());
+	for (int i=0;i<len;i++) {
+		if (i==p_request.row) {
+			r_text+=substrings[i].substr(0,p_request.column);
+			r_text+=String::chr(0xFFFF); //not unicode, represents the cursor
+			r_text+=substrings[i].substr(p_request.column,substrings[i].size());
 		} else {
-			p_text+=substrings[i];
+			r_text+=substrings[i];
 		}
 
 		if (i!=len-1)
-			p_text+="\n";
+			r_text+="\n";
 	}
+
+	return substrings[p_request.row];
 }
 
 Node* CodeCompletionService::_find_node_for_script(Node* p_base, Node* p_current, const Ref<Script>& p_script) {
@@ -98,7 +99,7 @@ Node* CodeCompletionService::_find_node_for_script(Node* p_base, Node* p_current
 	return NULL;
 }
 
-String CodeCompletionService::_filter_completion_candidates(int p_col, const String& p_line, List<String>& p_lang_keywords, const List<String>& p_options, Vector<String> &r_suggestions) {
+String CodeCompletionService::_filter_completion_candidates(int p_col, const String& p_line, const List<String>& p_options, Vector<String> &r_suggestions) {
 
 	int cofs = CLAMP(p_col,0,p_line.length());
 
@@ -141,7 +142,7 @@ String CodeCompletionService::_filter_completion_candidates(int p_col, const Str
 			kofs--;
 		}
 
-		pre_keyword=keywords.find(kw) || p_lang_keywords.find(kw);
+		pre_keyword=type_keywords.find(kw) || language_keywords.find(kw);
 
 	} else {
 
@@ -173,18 +174,22 @@ CodeCompletionService::CodeCompletionService() {
 	completion_prefixes.insert(",");
 	completion_prefixes.insert("(");
 
-	keywords.push_back("Vector2");
-	keywords.push_back("Vector3");
-	keywords.push_back("Plane");
-	keywords.push_back("Quat");
-	keywords.push_back("AABB");
-	keywords.push_back("Matrix3");
-	keywords.push_back("Transform");
-	keywords.push_back("Color");
-	keywords.push_back("Image");
-	keywords.push_back("InputEvent");
+	type_keywords.push_back("Vector2");
+	type_keywords.push_back("Vector3");
+	type_keywords.push_back("Plane");
+	type_keywords.push_back("Quat");
+	type_keywords.push_back("AABB");
+	type_keywords.push_back("Matrix3");
+	type_keywords.push_back("Transform");
+	type_keywords.push_back("Color");
+	type_keywords.push_back("Image");
+	type_keywords.push_back("InputEvent");
 
-	ObjectTypeDB::get_type_list(&keywords);
+	ObjectTypeDB::get_type_list(&type_keywords);
+
+	#ifdef GDSCRIPT_ENABLED
+	GDScriptLanguage::get_singleton()->get_reserved_words(&language_keywords);
+	#endif
 }
 
 CodeCompletionService::~CodeCompletionService() {
