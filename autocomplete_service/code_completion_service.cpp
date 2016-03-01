@@ -36,7 +36,7 @@ CodeCompletionService::Result CodeCompletionService::obtain_suggestions(const Re
 	String script_text = p_request.script_text;
 
 	if (script_text.empty()) {
-		ERR_FAIL_COND_V(!script->has_source_code(), result);
+		ERR_FAIL_COND_V(!script->has_source_code(), Result());
 		script_text = script->get_source_code();
 	}
 
