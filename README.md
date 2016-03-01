@@ -1,58 +1,71 @@
 
 # Godot Auto-complete Service
-Godot module that listens for HTTP Requests and returns auto-complete suggestions. Under test.
+ Godot module that provides autocomplete suggestions via HTTP requests
 
-### Use it from your provider
+### Providers
 
-Requesting for completion suggestions from your provider is quite simple.
-The server listens for HTTP Requests on http://localhost:port. The port varies depending of how many servers (editors) are listening at the same time.
+- [atom-autocomplete-gdscript](https://github.com/neikeq/atom-autocomplete-gdscript)
+
+### Usage from providers
+
+The server listens for HTTP Requests on http://localhost:port. The port varies depending of how many editors are providing suggestions at the same time.
+
+##### Getting the project path
+
+First you need to know the path of the project that owns the script. From the script directory, search backwards in the parent directories until you find the one that contains the file `engine.cfg`. This is the project path.
+
+Example from the [autocomplete-gdscript](https://github.com/neikeq/atom-autocomplete-gdscript/blob/master/lib/provider.coffee#L58-L60) atom package:
+
+``` CoffeeScript
+currentDir = new File(filePath).getParent()
+while not currentDir.getFile("engine.cfg").existsSync()
+    currentDir = currentDir.getParent()
+```
 
 ##### Getting the correct port
 
-The list of servers is stored in the following file:
+Now you need to know in which port the server that provides suggestions for this project is listening. The list of servers is stored in the following file:
 
-```
-$HOME/.godot/.autocomplete-servers.json
-$APPDATA\Godot\.autocomplete-servers.json
-```
+- Unix: `$HOME/.godot/.autocomplete-servers.json`
+- Windows: `$APPDATA\Godot\.autocomplete-servers.json`
 
-Content:
+This is the JSON content:
 
 ``` json
-{ "md5 of the project path": "port" }
+{ "Project path MD5": "port" }
 ```
 
-The key is the md5 hash of the project path. To know the project path for a file, you must search backwards in the parent directories of your script until you find the directory that contains the file `engine.cfg`.
+The keys are MD5 hashes of the project path.
 
-With this information you can retrieve the port for the server that provides code completion suggestions for your project.
+##### When to read the servers list
 
-##### When to retrieve the port
+There may be multiple situations where you will need to read the servers list file to get the server port. These are three example situations:
 
-This depends of how the provider is implemented. There are 3 example situations where you may need to read the servers list to know your port.
+- The first time the provider gets a suggestions request for a project.
+- When the server that provides suggestions for your project is no longer listening on the port currently known (note that there may not be any server providing suggestions for that project).
+- When the server returns a response with status code 404. This means the server listening on the port currently known is providing suggestions for a different project.
 
-- When you don't know the port for a project (either because this is the first request for that project, or because no server is providing suggestions for that project at that moment).
-- When the server returns a response with status code 404. This means the server no longer provides suggestions for this project.
-- Depending of the situation, it may be needed when a request results in an error.
+There may be other situations. You may want to ensure you have the correct port when a request results in an error not specified above. It depends of how the provider is implemented.
 
-##### Request example
+#### Request example
 
-Currently, only _POST_ method is allowed. The body must be a JSON with the completion request information.
+The server only accepts requests with method _POST_.
+
+##### Header
 
 ```
 POST http://localhost:port HTTP/1.1
 Accept: application/json
 Connection: keep-alive
 Content-Type: application/json; charset=UTF-8
-Content-Length: X
-
-{} ; body. see below
+Content-Length: 217
 ```
 
-The following is the JSON structure.
+##### Body
 
-The text field is optional, but it's recommended not to skip it. It must contain the script content. If skipped, the server will load the last saved version of the file, which could be outdated compared to the one being edited.
+The body of the request must be an UTF-8 encoded JSON with the code completion request information (read below).
 
-The meta field is also optional. It can contain any information you wish to receive back with the response.
+The following is the JSON structure:
 
 ``` json
 {
@@ -62,20 +75,24 @@ The meta field is also optional. It can contain any information you wish to rece
         "row": 0,
         "column": 0
     },
-    "meta": "Ignored by the service. Returned in the response."
+    "meta": "Ignored by the server, but returned in the response."
 }
 ```
 
-##### Response example
+The text field is optional, but it's recommended not to skip it. It must contain the script content. If skipped, the server will load the last saved or cached version of the file, which could be outdated compared to the one being edited.
 
-If everything went well, you should receive a response like this:
+The meta field is also optional. It can contain any information you wish to receive back with the response.
+
+#### Response example
+
+If the request is valid and everything went well, you should receive a response like this:
 
 ```
 HTTP/1.1 200 OK
 Server: Godot Auto-complete service
 Connection: keep-alive
 Content-Type: application/json; charset=UTF-8
-Content-Length: X
+Content-Length: 390
 ```
 
 ``` json
@@ -85,7 +102,7 @@ Content-Length: X
         "row": 0,
         "column": 0
     },
-    "meta": "Ignored by the service. Returned in the response.",
+    "meta": "Ignored by the server, but returned in the response.",
     "hint": "Node find_node( String mask, bool recursive=true, bool owned=true )",
     "suggestions": [
         "get_child(",
@@ -96,12 +113,8 @@ Content-Length: X
 }
 ```
 
-The important parts are the following fields:
+Important fields:
 
-- **hint** When typing parameters, the response returns a hint with information about the function return type and parameters. The hint encloses the current parameter with line breaks. Example: `Node get_node( \nNodePath path\n )`. You can replace the line breaks to fit editor style. For example, with HTML bold tags: `Node get_node( <b>NodePath path</b> )`.
-- **suggestions** The resulted list of completion suggestions.
-- **prefix** The prefix string to be replaced with the user's chosen suggestion.
-
-### Providers
-
-- [atom-autocomplete-gdscript](https://github.com/neikeq/atom-autocomplete-gdscript)
+- **hint** When typing method parameters, the response returns a hint with information about the function return type and its parameters. The hint encloses the current parameter with line breaks. Example: `Node get_node( \nNodePath path\n )`. You can replace the line breaks to fit your editor style. For example, with HTML bold tags: `Node get_node( <b>NodePath path</b> )`.
+- **suggestions** The resulted list of auto-complete suggestions.
+- **prefix** The prefix to be replaced with the user's chosen suggestion.
