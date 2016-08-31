@@ -74,7 +74,8 @@ class CodeCompletionServer : public Object {
 			resp += "\r\n";
 			resp += p_body;
 
-			cd->connection->put_utf8_string(resp);
+			CharString utf = resp.utf8();
+			cd->connection->put_data((const uint8_t*)utf.get_data(), utf.length());
 		}
 
 		Request(ClientData *cd) {
