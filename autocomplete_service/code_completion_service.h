@@ -11,9 +11,16 @@ class CodeCompletionService : public Node {
 public:
 	struct Request {
 		String script_path;
+		bool has_script_text;
 		String script_text;
 		int row;
 		int column;
+
+		Request() {
+			has_script_text = false;
+			row = 0;
+			column = 0;
+		}
 	};
 
 	struct Result {

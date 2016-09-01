@@ -36,6 +36,9 @@ CodeCompletionService::Result CodeCompletionService::obtain_suggestions(const Re
 	String script_text = p_request.script_text;
 
 	if (script_text.empty()) {
+		if (p_request.has_script_text)
+			return Result();
+
 		ERR_FAIL_COND_V(!script->has_source_code(), Result());
 		script_text = script->get_source_code();
 	}
@@ -50,7 +53,7 @@ CodeCompletionService::Result CodeCompletionService::obtain_suggestions(const Re
 	List<String> options;
 	script->get_language()->complete_code(script_text, script->get_path().get_base_dir(), base, &options, result.hint);
 
-	if (options.size() > 0) {
+	if (options.size()) {
 		result.prefix = _filter_completion_candidates(p_request.column, current_line, options, result.suggestions);
 	}
 

@@ -120,7 +120,12 @@ void CodeCompletionServer::_subthread_start(void *s) {
 					// Provide suggestions based on the request
 					CodeCompletionService::Request srequest;
 					srequest.script_path = data["path"];
-					srequest.script_text = data["text"];
+
+					if (data.has("text")) {
+						srequest.script_text = data["text"];
+						srequest.has_script_text = true;
+					}
+
 					Dictionary cursor = data["cursor"];
 					srequest.row = cursor["row"];
 					srequest.column = cursor["column"];
