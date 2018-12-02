@@ -9,7 +9,7 @@
 
 class CodeCompletionServer : public Object {
 
-	OBJ_TYPE(CodeCompletionServer, Object);
+	GDCLASS(CodeCompletionServer, Object);
 
 	enum Command {
 		CMD_NONE,

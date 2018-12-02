@@ -7,7 +7,7 @@
 
 class CompletionServicePlugin : public EditorPlugin {
 
-	OBJ_TYPE(CompletionServicePlugin, EditorPlugin);
+	GDCLASS(CompletionServicePlugin, EditorPlugin);
 
 	CodeCompletionServer *server;
 	CodeCompletionService *service;
