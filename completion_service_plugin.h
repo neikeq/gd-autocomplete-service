@@ -2,7 +2,7 @@
 #ifndef COMPLETION_SERVICE_PLUGIN_H
 #define COMPLETION_SERVICE_PLUGIN_H
 
-#include "tools/editor/editor_plugin.h"
+#include "../../editor/editor_plugin.h"
 #include "code_completion_server.h"
 
 class CompletionServicePlugin : public EditorPlugin {
