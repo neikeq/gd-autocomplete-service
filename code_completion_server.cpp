@@ -1,8 +1,9 @@
 /* code_completion_server.cpp */
 #include "code_completion_server.h"
-#include "os/file_access.h"
-#include "tools/editor/editor_settings.h"
-#include "globals.h"
+
+//#include "os/file_access.h"
+#include "../../editor/editor_settings.h"
+//#include "globals.h"
 
 #define CLOSE_CLIENT_COND(m_cond, m_cd) \
 	{ if ( m_cond ) {	\
@@ -12,7 +13,7 @@
 
 void CodeCompletionServer::_close_client(ClientData *cd) {
 
-	cd->connection->disconnect();
+	cd->connection->disconnect_from_host();
 	cd->ccs->wait_mutex->lock();
 	cd->ccs->to_wait.insert(cd->thread);
 	cd->ccs->wait_mutex->unlock();
@@ -22,7 +23,7 @@ void CodeCompletionServer::_close_client(ClientData *cd) {
 void CodeCompletionServer::_subthread_start(void *s) {
 
 	ClientData *cd = (ClientData*)s;
-	cd->connection->set_nodelay(true);
+	cd->connection->set_no_delay(true);
 
 	static const char* _methods[METHOD_MAX]={
 		"GET",
@@ -106,8 +107,9 @@ void CodeCompletionServer::_subthread_start(void *s) {
 					}
 
 					// Read and parse body as json
-					Dictionary data;
-					Error parse_err = data.parse_json(request.read_utf8_body());
+                    Ref<JSONParseResult> reqres = _JSON::get_singleton()->parse(request.read_utf8_body());
+                    Dictionary data = reqres->get_result();
+					Error parse_err = reqres->get_error();
 
 					if (parse_err != OK) {
 						request.response.status = "400 Bad Request";
@@ -146,7 +148,7 @@ void CodeCompletionServer::_subthread_start(void *s) {
 					// Done! Deliver <3
 					request.response.status = "200 OK";
 					request.response.set_header("Content-Type", "application/json; charset=UTF-8");
-					request.send_response(data.to_json());
+					request.send_response(_JSON::get_singleton()->print(Variant(data)));
 
 				} break;
 				default: {
@@ -235,7 +237,7 @@ void CodeCompletionServer::stop() {
 
 void CodeCompletionServer::_add_to_servers_list() {
 
-	String serversPath = EditorSettings::get_singleton()->get_settings_path() + "/.autocomplete-servers.json";
+	String serversPath = EditorSettings::get_singleton()->get_settings_dir() + "/.autocomplete-servers.json";
 	Dictionary serversList;
 
 	FileAccess *f_read=FileAccess::open(serversPath,FileAccess::READ);
@@ -248,7 +250,8 @@ void CodeCompletionServer::_add_to_servers_list() {
 		}
 		text+=l;
 
-		serversList.parse_json(text);
+        Ref<JSONParseResult> reqres = _JSON::get_singleton()->parse(text);
+		serversList = reqres->get_result();
 		f_read->close();
 		memdelete(f_read);
 	}
@@ -268,9 +271,8 @@ void CodeCompletionServer::_add_to_servers_list() {
 			}
 		}
 
-		serversList[Globals::get_singleton()->get_resource_path().md5_text()] = serverPort;
-
-		f_write->store_string(serversList.to_json());
+		serversList[ProjectSettings::get_singleton()->get_resource_path().md5_text()] = serverPort;
+		f_write->store_string(_JSON::get_singleton()->print(Variant(serversList)));
 		f_write->close();
 		memdelete(f_write);
 	}
@@ -278,7 +280,7 @@ void CodeCompletionServer::_add_to_servers_list() {
 
 CodeCompletionServer::CodeCompletionServer() {
 
-	server = TCP_Server::create_ref();
+	server = Ref<TCP_Server>();
 	wait_mutex = Mutex::create();
 	quit = false;
 	active = false;

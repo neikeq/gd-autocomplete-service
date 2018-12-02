@@ -1,11 +1,10 @@
 /* code_completion_service.cpp */
 
 #include "code_completion_service.h"
-#include "io/resource_loader.h"
-#include "globals.h"
-
+//#include "io/resource_loader.h"
+//#include "globals.h"
 #ifdef GDSCRIPT_ENABLED
-#include "modules/gdscript/gd_script.h"
+#include "../gdscript/gdscript.h"
 #endif
 
 static bool _is_symbol(CharType c) {
@@ -20,17 +19,17 @@ static bool _is_completable(CharType c) {
 
 CodeCompletionService::Result CodeCompletionService::obtain_suggestions(const Request& p_request) {
 
-	#ifdef GDSCRIPT_ENABLED
+    #ifdef GDSCRIPT_ENABLED
 	Result result(true);
 
-	String path = Globals::get_singleton()->localize_path(p_request.script_path);
+	String path = ProjectSettings::get_singleton()->localize_path(p_request.script_path);
 
 	if (path == "res://" || !path.begins_with("res://"))
 		return Result();
 
 	Ref<Script> script = ResourceLoader::load(path);
 
-	if (!script.is_valid() || !script->cast_to<GDScript>())
+	if (!script.is_valid() || !Object::cast_to<GDScript>(*script))
 		return Result();
 
 	String script_text = p_request.script_text;
@@ -51,7 +50,8 @@ CodeCompletionService::Result CodeCompletionService::obtain_suggestions(const Re
 	String current_line = _get_text_for_completion(p_request, script_text);
 
 	List<String> options;
-	script->get_language()->complete_code(script_text, script->get_path().get_base_dir(), base, &options, result.hint);
+    bool force = false;
+	script->get_language()->complete_code(script_text, script->get_path().get_base_dir(), base, &options, force, result.hint);
 
 	if (options.size()) {
 		result.prefix = _filter_completion_candidates(p_request.column, current_line, options, result.suggestions);
@@ -60,7 +60,7 @@ CodeCompletionService::Result CodeCompletionService::obtain_suggestions(const Re
 	return result;
 	#else
 	return Result();
-	#endif
+    #endif
 }
 
 String CodeCompletionService::_get_text_for_completion(const Request& p_request, String& r_text) {
@@ -188,7 +188,8 @@ CodeCompletionService::CodeCompletionService() {
 	type_keywords.push_back("Image");
 	type_keywords.push_back("InputEvent");
 
-	ObjectTypeDB::get_type_list(&type_keywords);
+    // TODO: not sure what this is supposed to do
+    //	ObjectTypeDB::get_type_list(&type_keywords);
 
 	#ifdef GDSCRIPT_ENABLED
 	GDScriptLanguage::get_singleton()->get_reserved_words(&language_keywords);

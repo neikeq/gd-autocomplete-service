@@ -5,6 +5,7 @@
 #include "../../core/object.h"
 #include "../../core/os/thread.h"
 #include "../../core/io/tcp_server.h"
+#include "../../core/bind/core_bind.h"
 #include "code_completion_service.h"
 
 class CodeCompletionServer : public Object {
