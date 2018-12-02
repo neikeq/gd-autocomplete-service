@@ -1,6 +1,12 @@
 
 # Godot Auto-complete Service
  Godot module that provides autocomplete suggestions via HTTP requests
+### Installation Instruction
+clone the repo into the modules directory in the godot engine source code like so:
+godot/modules/gd_autocomplete_service
+
+compile the source code according to the instructions here:
+https://docs.godotengine.org/en/latest/development/compiling/index.html
 
 ### Providers
 
