@@ -280,7 +280,7 @@ void CodeCompletionServer::_add_to_servers_list() {
 
 CodeCompletionServer::CodeCompletionServer() {
 
-	server = Ref<TCP_Server>();
+	server.instance();
 	wait_mutex = Mutex::create();
 	quit = false;
 	active = false;

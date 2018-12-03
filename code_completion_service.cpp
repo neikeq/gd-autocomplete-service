@@ -82,7 +82,7 @@ String CodeCompletionService::_get_text_for_completion(const Request& p_request,
 		if (i!=len-1)
 			r_text+="\n";
 	}
-
+	// FIXME: check bounds!
 	return substrings[p_request.row];
 }
 
