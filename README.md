@@ -18,13 +18,13 @@ The server listens for HTTP Requests on http://localhost:port. The port varies d
 
 ##### Getting the project path
 
-First you need to know the path of the project that owns the script. From the script directory, search backwards in the parent directories until you find the one that contains the file `engine.cfg`. This is the project path.
+First you need to know the path of the project that owns the script. From the script directory, search backwards in the parent directories until you find the one that contains the file `project.godot`. This is the project path.
 
 Example from the [autocomplete-gdscript](https://github.com/neikeq/atom-autocomplete-gdscript/blob/master/lib/provider.coffee#L58-L60) atom package:
 
 ``` CoffeeScript
 currentDir = new File(filePath).getParent()
-while not currentDir.getFile("engine.cfg").existsSync()
+while not currentDir.getFile("project.godot").existsSync()
     currentDir = currentDir.getParent()
 ```
 
