@@ -1,7 +1,7 @@
 /* register_types.cpp */
 #include "register_types.h"
 
-#if defined(TOOLS_ENABLED) && defined(TOOLS_ENABLED)
+#ifdef TOOLS_ENABLED
 #define AUTOCOMPLETE_SERVICE
 #endif
 
