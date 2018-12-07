@@ -32,7 +32,7 @@ while not currentDir.getFile("project.godot").existsSync()
 
 Now you need to know in which port the server that provides suggestions for this project is listening. The list of servers is stored in the following file:
 
-- Unix: `$HOME/.godot/.autocomplete-servers.json`
+- Unix: `$HOME/.config/godot/.autocomplete-servers.json`
 - Windows: `$APPDATA\Godot\.autocomplete-servers.json`
 
 This is the JSON content:
