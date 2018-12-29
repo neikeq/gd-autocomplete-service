@@ -24,9 +24,6 @@ CodeCompletionService::Result CodeCompletionService::obtain_suggestions(const Re
 
 	String path = ProjectSettings::get_singleton()->localize_path(p_request.script_path);
 
-	if (path == "res://" || !path.begins_with("res://"))
-		return Result();
-
 	Ref<Script> script = ResourceLoader::load(path);
 
 	if (!script.is_valid() || !Object::cast_to<GDScript>(*script))
