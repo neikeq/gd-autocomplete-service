@@ -1,6 +1,12 @@
 
 # Godot Auto-complete Service
  Godot module that provides autocomplete suggestions via HTTP requests
+### Installation Instruction
+clone the repo into the modules directory in the godot engine source code like so:
+godot/modules/gd_autocomplete_service
+
+compile the source code according to the instructions here:
+https://docs.godotengine.org/en/latest/development/compiling/index.html
 
 ### Providers
 
@@ -12,13 +18,13 @@ The server listens for HTTP Requests on http://localhost:port. The port varies d
 
 ##### Getting the project path
 
-First you need to know the path of the project that owns the script. From the script directory, search backwards in the parent directories until you find the one that contains the file `engine.cfg`. This is the project path.
+First you need to know the path of the project that owns the script. From the script directory, search backwards in the parent directories until you find the one that contains the file `project.godot`. This is the project path.
 
 Example from the [autocomplete-gdscript](https://github.com/neikeq/atom-autocomplete-gdscript/blob/master/lib/provider.coffee#L58-L60) atom package:
 
 ``` CoffeeScript
 currentDir = new File(filePath).getParent()
-while not currentDir.getFile("engine.cfg").existsSync()
+while not currentDir.getFile("project.godot").existsSync()
     currentDir = currentDir.getParent()
 ```
 
@@ -26,7 +32,7 @@ while not currentDir.getFile("engine.cfg").existsSync()
 
 Now you need to know in which port the server that provides suggestions for this project is listening. The list of servers is stored in the following file:
 
-- Unix: `$HOME/.godot/.autocomplete-servers.json`
+- Unix: `$HOME/.config/godot/.autocomplete-servers.json`
 - Windows: `$APPDATA\Godot\.autocomplete-servers.json`
 
 This is the JSON content:

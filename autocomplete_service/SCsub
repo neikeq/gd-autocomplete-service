@@ -1,7 +1,0 @@
-# SCsub
-Import('env')
-
-if env['tools'] == 'yes' and env['gdscript'] == 'yes':
-    env.add_source_files(env.modules_sources,'*.cpp')
-else:
-    env.add_source_files(env.modules_sources,'register_types.cpp')

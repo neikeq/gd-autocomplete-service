@@ -6,7 +6,7 @@
 
 class CodeCompletionService : public Node {
 
-	OBJ_TYPE(CodeCompletionService, Node);
+	GDCLASS(CodeCompletionService, Node);
 
 public:
 	struct Request {

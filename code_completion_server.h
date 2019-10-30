@@ -2,14 +2,15 @@
 #ifndef CODE_COMPLETION_SERVER_H
 #define CODE_COMPLETION_SERVER_H
 
-#include "object.h"
-#include "os/thread.h"
-#include "io/tcp_server.h"
+#include "../../core/object.h"
+#include "../../core/os/thread.h"
+#include "../../core/io/tcp_server.h"
+#include "../../core/bind/core_bind.h"
 #include "code_completion_service.h"
 
 class CodeCompletionServer : public Object {
 
-	OBJ_TYPE(CodeCompletionServer, Object);
+	GDCLASS(CodeCompletionServer, Object);
 
 	enum Command {
 		CMD_NONE,
